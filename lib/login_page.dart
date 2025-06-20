@@ -12,11 +12,12 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
-  final emailController = TextEditingController();
-  final passwordController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
   bool _rememberMe = false;
-  bool _isLoading = true; // Để kiểm tra trạng thái load prefs
-  bool _autoLoggedIn = false;
+  bool _isLoading = false;
+  bool _obscurePassword = true;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -25,47 +26,61 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _checkLoginStatus() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    bool? isLoggedIn = prefs.getBool('is_logged_in');
-    String? savedEmail = prefs.getString('email');
-    String? savedPassword = prefs.getString('password');
+    final prefs = await SharedPreferences.getInstance();
+    final isLoggedIn = prefs.getBool('is_logged_in') ?? false;
+    final savedEmail = prefs.getString('email');
+    final savedPassword = prefs.getString('password');
 
-    if (isLoggedIn == true) {
-      // Nếu đã đăng nhập, chuyển thẳng về HomePage
-      _autoLoggedIn = true;
-      if (mounted) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const HomePage()),
+    if (isLoggedIn && savedEmail != null && savedPassword != null) {
+      try {
+        setState(() => _isLoading = true);
+        await FirebaseAuth.instance.signInWithEmailAndPassword(
+          email: savedEmail,
+          password: savedPassword,
         );
+        if (mounted) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const HomePage()),
+          );
+        }
+      } catch (e) {
+        await prefs.remove('password');
+      } finally {
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
       }
     } else {
-      // Nếu chưa đăng nhập thì load dữ liệu để điền form
-      emailController.text = savedEmail ?? '';
-      passwordController.text = savedPassword ?? '';
+      _emailController.text = savedEmail ?? '';
+      _passwordController.text = savedPassword ?? '';
       _rememberMe = savedPassword != null;
-    }
-
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-      });
     }
   }
 
-  Future<void> login() async {
+  Future<void> _login() async {
+    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
+      setState(() => _errorMessage = 'Vui lòng nhập email và mật khẩu');
+      return;
+    }
+
+    setState(() {
+      _errorMessage = null;
+      _isLoading = true;
+    });
+
     try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: emailController.text.trim(),
-        password: passwordController.text.trim(),
+      final userCredential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
       );
 
       final prefs = await SharedPreferences.getInstance();
       await prefs.setBool('is_logged_in', true);
-      await prefs.setString('email', emailController.text.trim());
+      await prefs.setString('email', _emailController.text.trim());
 
       if (_rememberMe) {
-        await prefs.setString('password', passwordController.text.trim());
+        await prefs.setString('password', _passwordController.text.trim());
       } else {
         await prefs.remove('password');
       }
@@ -76,18 +91,36 @@ class _LoginPageState extends State<LoginPage> {
           MaterialPageRoute(builder: (_) => const HomePage()),
         );
       }
+    } on FirebaseAuthException catch (e) {
+      setState(() => _errorMessage = _getAuthErrorMessage(e));
     } catch (e) {
-      print('Login error: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Đăng nhập thất bại')),
-      );
+      setState(() => _errorMessage = 'Lỗi hệ thống: ${e.toString()}');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  String _getAuthErrorMessage(FirebaseAuthException e) {
+    switch (e.code) {
+      case 'user-not-found':
+        return 'Email không tồn tại';
+      case 'wrong-password':
+        return 'Mật khẩu không đúng';
+      case 'user-disabled':
+        return 'Tài khoản đã bị vô hiệu hóa';
+      case 'too-many-requests':
+        return 'Quá nhiều yêu cầu. Vui lòng thử lại sau';
+      default:
+        return 'Đăng nhập thất bại: ${e.message}';
     }
   }
 
   @override
   void dispose() {
-    emailController.dispose();
-    passwordController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
@@ -100,47 +133,79 @@ class _LoginPageState extends State<LoginPage> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Đăng nhập')),
+      appBar: AppBar(
+        title: const Text('Đăng nhập'),
+      ),
       body: Padding(
         padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            TextField(
-              controller: emailController,
-              decoration: const InputDecoration(labelText: 'Email'),
-              keyboardType: TextInputType.emailAddress,
+        child: _buildLoginForm(),
+      ),
+    );
+  }
+
+  Widget _buildLoginForm() {
+    return SingleChildScrollView(
+      child: Column(
+        children: [
+          if (_errorMessage != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Text(
+                _errorMessage!,
+                style: const TextStyle(color: Colors.red, fontSize: 16),
+              ),
             ),
-            TextField(
-              controller: passwordController,
-              decoration: const InputDecoration(labelText: 'Mật khẩu'),
-              obscureText: true,
+          TextField(
+            controller: _emailController,
+            decoration: const InputDecoration(
+              labelText: 'Email',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.email),
             ),
-            Row(
-              children: [
-                Checkbox(
-                  value: _rememberMe,
-                  onChanged: (value) {
-                    setState(() {
-                      _rememberMe = value ?? false;
-                    });
-                  },
-                ),
-                const Text('Ghi nhớ mật khẩu'),
-              ],
+            keyboardType: TextInputType.emailAddress,
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _passwordController,
+            decoration: InputDecoration(
+              labelText: 'Mật khẩu',
+              border: const OutlineInputBorder(),
+              prefixIcon: const Icon(Icons.lock),
+              suffixIcon: IconButton(
+                icon: Icon(_obscurePassword ? Icons.visibility : Icons.visibility_off),
+                onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+              ),
             ),
-            const SizedBox(height: 20),
-            ElevatedButton(onPressed: login, child: const Text('Đăng nhập')),
-            TextButton(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const SignUpPage()),
-                );
-              },
-              child: const Text('Chưa có tài khoản? Đăng ký'),
+            obscureText: _obscurePassword,
+          ),
+          Row(
+            children: [
+              Checkbox(
+                value: _rememberMe,
+                onChanged: (value) => setState(() => _rememberMe = value ?? false),
+              ),
+              const Text('Ghi nhớ mật khẩu'),
+              const Spacer(),
+            ],
+          ),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton(
+              onPressed: _login,
+              child: const Text('ĐĂNG NHẬP', style: TextStyle(fontSize: 16)),
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 16),
+          TextButton(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SignUpPage()),
+            ),
+            child: const Text('Chưa có tài khoản? Đăng ký ngay'),
+          ),
+        ],
       ),
     );
   }
