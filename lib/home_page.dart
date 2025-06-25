@@ -1,85 +1,113 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_map/flutter_map.dart';
-import 'package:latlong2/latlong.dart';
-import 'friend_list_page.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'login_page.dart';
 import 'profile_page.dart';
+import 'friend_list_page.dart';
+import 'map_page.dart';
 
-class HomePage extends StatefulWidget {
+class HomePage extends StatelessWidget {
   const HomePage({super.key});
 
-  @override
-  State<HomePage> createState() => _HomePageState();
-}
+  Future<void> logout(BuildContext context) async {
+    await FirebaseAuth.instance.signOut();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool('is_logged_in', false);
 
-class _HomePageState extends State<HomePage> {
-  final MapController _mapController = MapController();
-
-  final Map<String, LatLng> friendLocations = {
-    'Ngoc': LatLng(21.030, 105.800),
-    'Huy': LatLng(21.035, 105.805),
-  };
-
-  void _goToFriend(String name) {
-    final location = friendLocations[name];
-    if (location != null) {
-      _mapController.move(location, _mapController.camera.zoom);
-    }
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => LoginPage()),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: Color(0xFFFFF5FD),
       appBar: AppBar(
-        title: const Text('Bản đồ bạn bè'),
-        leading: IconButton(
-          icon: const Icon(Icons.people_alt),
-          onPressed: () async {
-            final selected = await Navigator.push<String>(
-              context,
-              MaterialPageRoute(builder: (context) => const FriendListScreen()),
-            );
-            if (selected != null) _goToFriend(selected);
-          },
+        backgroundColor: Color(0xFFFFC1E3),
+        title: Row(
+          children: [
+            Icon(Icons.star_rounded, color: Color(0xFFB5F8FE)),
+            SizedBox(width: 8),
+            Text('Xin chào Gen Z! 🦄', style: TextStyle(fontFamily: 'BeVietnamPro')),
+          ],
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.person),
+            icon: Icon(Icons.account_circle, color: Color(0xFFB5F8FE)),
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const ProfilePage()),
+                MaterialPageRoute(builder: (_) => ProfilePage()),
               );
             },
           ),
+          IconButton(
+            icon: Icon(Icons.logout, color: Color(0xFFB5F8FE)),
+            onPressed: () => logout(context),
+          ),
         ],
+        elevation: 0,
       ),
-      body: FlutterMap(
-        mapController: _mapController,
-        options: MapOptions(
-          initialCenter: const LatLng(21.028511, 105.804817),
-          initialZoom: 13,
-        ),
-        children: [
-          TileLayer(
-            urlTemplate:
-            'https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/256/{z}/{x}/{y}@2x?access_token=pk.eyJ1IjoiMnRteTI2IiwiYSI6ImNtOXkzNnBmczFjc3MyaXB5bWhxNzA5aXMifQ.NGsfTuxwfT6P5K2EVwucTQ',
-            userAgentPackageName: 'com.example.tracking',
-          ),
-          MarkerLayer(
-            markers: friendLocations.entries.map((entry) {
-              return Marker(
-                point: entry.value,
-                width: 40,
-                height: 40,
-                child: const Icon(
-                  Icons.location_pin,
-                  color: Colors.red,
-                  size: 30,
+      body: Center(
+        child: SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: 400),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                SizedBox(height: 16),
+                Text(
+                  'Chào mừng bạn đến với Tracking App! 💖',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF7F6B8A),
+                    fontFamily: 'BeVietnamPro',
+                  ),
+                  textAlign: TextAlign.center,
                 ),
-              );
-            }).toList(),
+                SizedBox(height: 24),
+                Card(
+                  color: Color(0xFFB5F8FE),
+                  elevation: 4,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                  child: ListTile(
+                    leading: Icon(Icons.people, color: Color(0xFFFFC1E3)),
+                    title: Text('Bạn bè', style: TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Text('Kết nối bạn bè siêu tốc 🚀'),
+                    trailing: Icon(Icons.arrow_forward_ios, color: Color(0xFFFFC1E3)),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => FriendListScreen()),
+                      );
+                    },
+                  ),
+                ),
+                SizedBox(height: 16),
+                Card(
+                  color: Color(0xFFFFC1E3),
+                  elevation: 4,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                  child: ListTile(
+                    leading: Icon(Icons.map, color: Color(0xFFB5F8FE)),
+                    title: Text('Bản đồ', style: TextStyle(fontWeight: FontWeight.bold)),
+                    subtitle: Text('Xem vị trí bạn bè trên map 🗺️'),
+                    trailing: Icon(Icons.arrow_forward_ios, color: Color(0xFFB5F8FE)),
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => HomeScreen()),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
           ),
-        ],
+        ),
       ),
     );
   }
