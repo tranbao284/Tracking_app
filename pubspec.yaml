@@ -8,6 +8,13 @@ environment:
   sdk: ^3.0.0
 
 dependencies:
+  geolocator: ^10.1.0
+  universal_html: ^2.0.0
+  http: ^1.4.0
+  image_picker: ^1.0.4
+  http_parser: ^4.0.1
+  path: ^1.8.3
+  mime: ^1.0.5
   flutter:
     sdk: flutter
   firebase_core: ^2.30.0
