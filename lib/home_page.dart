@@ -8,9 +8,8 @@ import 'package:latlong2/latlong.dart';
 import 'ors_service.dart';
 import 'profile_page.dart';
 import 'friend_management_page.dart';
-import 'firestore_service.dart'; //  Quan trọng: Thêm import này
+import 'firestore_service.dart';
 
-//  Tạo một class để chứa thông tin bạn bè cho dễ quản lý
 class Friend {
   final String id;
   final String name;
@@ -34,15 +33,18 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   final MapController _mapController = MapController();
-  final FirestoreService _firestoreService = FirestoreService(); //  Khởi tạo service
+  final FirestoreService _firestoreService = FirestoreService();
 
-  LatLng? _currentLocation;
+  // ✅ THAY ĐỔI 1: Sử dụng ValueNotifier để chứa vị trí hiện tại
+  // Điều này cho phép chúng ta cập nhật vị trí mà không cần gọi setState
+  final ValueNotifier<LatLng?> _currentLocationNotifier = ValueNotifier(null);
+
+  LatLng? _mapCenter;
   Timer? _locationUpdateTimer;
   Duration? _tripDuration;
   List<LatLng> _routePoints = [];
   bool _isLoadingRoute = false;
 
-  //  Danh sách bạn bè sẽ được cập nhật từ Stream
   List<Friend> _friends = [];
 
   @override
@@ -53,60 +55,68 @@ class _HomePageState extends State<HomePage> {
 
   @override
   void dispose() {
-    _locationUpdateTimer?.cancel(); // Hủy timer khi widget bị xóa
+    _locationUpdateTimer?.cancel();
+    _currentLocationNotifier.dispose(); // Nhớ dispose notifier
     super.dispose();
   }
 
   void _initLocationTracking() async {
-    // ... (Phần code xin quyền giữ nguyên)
     LocationPermission permission = await Geolocator.requestPermission();
     if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
       return;
     }
 
-    // Lấy vị trí lần đầu
     try {
       Position pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.bestForNavigation);
       final initialPos = LatLng(pos.latitude, pos.longitude);
-      if (mounted) {
-        setState(() {
-          _currentLocation = initialPos;
-        });
-        // Cập nhật vị trí lên Firebase
-        _firestoreService.updateUserLocation(initialPos);
-      }
+
+      // ✅ THAY ĐỔI 2: Cập nhật notifier và chỉ gọi setState cho _mapCenter một lần
+      _currentLocationNotifier.value = initialPos;
+      setState(() {
+        _mapCenter = initialPos;
+      });
+      _firestoreService.updateUserLocation(initialPos);
+
     } catch (e) {
-      print(' Lỗi lấy vị trí lần đầu: $e');
+      print('❌ Lỗi lấy vị trí lần đầu: $e');
     }
 
-    //Cập nhật vị trí mỗi 10 giây và lưu lên Firebase
     _locationUpdateTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
       try {
         final position = await Geolocator.getCurrentPosition();
         final newPos = LatLng(position.latitude, position.longitude);
 
-        if (mounted) {
-          setState(() {
-            _currentLocation = newPos;
-          });
-          // Cập nhật vị trí lên Firebase
-          _firestoreService.updateUserLocation(newPos);
+        if (_currentLocationNotifier.value != null) {
+          final double distance = const Distance().as(
+            LengthUnit.Meter,
+            _currentLocationNotifier.value!,
+            newPos,
+          );
+          if (distance > 300) {
+            print('📛 Vị trí nhảy quá xa: ${distance.round()}m. Bỏ qua cập nhật.');
+            return;
+          }
         }
+
+        // ✅ THAY ĐỔI 3: Chỉ cập nhật giá trị của notifier, KHÔNG GỌI setState
+        _currentLocationNotifier.value = newPos;
+        _firestoreService.updateUserLocation(newPos);
+
       } catch (e) {
-        print(' Lỗi lấy vị trí định kỳ: $e');
+        print('❌ Lỗi lấy vị trí định kỳ: $e');
       }
     });
   }
 
   Future<void> _showPathSelectionDialog() async {
-    if (_currentLocation == null) {
+    // Sử dụng giá trị từ notifier để kiểm tra
+    if (_currentLocationNotifier.value == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Chưa có vị trí hiện tại để tìm đường!')),
       );
       return;
     }
-
-    //  Lấy danh sách bạn bè có vị trí để chọn
+    // ... phần còn lại của hàm giữ nguyên
     final friendsWithLocation = _friends.where((f) => f.location != null).toList();
 
     if (friendsWithLocation.isEmpty) {
@@ -147,7 +157,7 @@ class _HomePageState extends State<HomePage> {
     });
 
     try {
-      final routeInfo = await getRouteORS(_currentLocation!, friendPosition);
+      final routeInfo = await getRouteORS(_currentLocationNotifier.value!, friendPosition);
       setState(() {
         _routePoints = routeInfo.points;
         _tripDuration = routeInfo.duration;
@@ -174,8 +184,8 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _zoomToMyLocation() {
-    if (_currentLocation != null) {
-      _mapController.move(_currentLocation!, 16.0);
+    if (_currentLocationNotifier.value != null) {
+      _mapController.move(_currentLocationNotifier.value!, 16.0);
     }
   }
 
@@ -197,7 +207,6 @@ class _HomePageState extends State<HomePage> {
           ),
         ],
       ),
-
       body: StreamBuilder<QuerySnapshot>(
         stream: _firestoreService.getFriendsStream(),
         builder: (context, snapshot) {
@@ -205,7 +214,6 @@ class _HomePageState extends State<HomePage> {
             return const Center(child: CircularProgressIndicator());
           }
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            // Vẫn hiển thị bản đồ ngay cả khi không có bạn bè
             return _buildMap([]);
           }
 
@@ -218,7 +226,6 @@ class _HomePageState extends State<HomePage> {
                 return const Center(child: CircularProgressIndicator());
               }
 
-              //  Cập nhật danh sách bạn bè từ dữ liệu mới nhất
               _friends = userSnapshots.data!.map((doc) {
                 final data = doc.data() as Map<String, dynamic>;
                 final locationData = data['location'] as GeoPoint?;
@@ -230,7 +237,6 @@ class _HomePageState extends State<HomePage> {
                 );
               }).toList();
 
-              //  Xây dựng bản đồ với danh sách bạn bè đã được cập nhật
               return _buildMap(_friends);
             },
           );
@@ -239,9 +245,8 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  //  Tách riêng widget bản đồ để dễ quản lý
   Widget _buildMap(List<Friend> friends) {
-    if (_currentLocation == null) {
+    if (_mapCenter == null) {
       return const Center(child: Text('⏳ Đang lấy vị trí...'));
     }
 
@@ -250,7 +255,7 @@ class _HomePageState extends State<HomePage> {
         FlutterMap(
           mapController: _mapController,
           options: MapOptions(
-            initialCenter: _currentLocation!,
+            initialCenter: _mapCenter!,
             initialZoom: 16,
           ),
           children: [
@@ -261,28 +266,49 @@ class _HomePageState extends State<HomePage> {
             PolylineLayer(
               polylines: [Polyline(points: _routePoints, strokeWidth: 4, color: Colors.green)],
             ),
-            MarkerLayer(
-              markers: [
-                //  Vẽ marker cho bạn bè
-                ...friends.where((f) => f.location != null).map(
-                      (friend) => Marker(
-                    point: friend.location!,
-                    width: 80,
-                    height: 80,
-                    child: Tooltip(
-                      message: friend.name,
-                      child: const Icon(Icons.location_pin, color: Colors.red, size: 35),
+            // ✅ THAY ĐỔI 4: Bọc MarkerLayer trong ValueListenableBuilder
+            ValueListenableBuilder<LatLng?>(
+              valueListenable: _currentLocationNotifier,
+              builder: (context, currentLocation, child) {
+                // Chỉ vẽ marker khi có vị trí
+                if (currentLocation == null) {
+                  return const SizedBox.shrink();
+                }
+                return MarkerLayer(
+                  markers: [
+                    ...friends.where((f) => f.location != null).map(
+                          (friend) => Marker(
+                        point: friend.location!,
+                        width: 80,
+                        height: 80,
+                        child: Column(
+                          children: [
+                            const Icon(Icons.location_pin, color: Colors.red, size: 35),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(10),
+                                boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4)],
+                              ),
+                              child: Text(
+                                friend.name,
+                                style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
-                ),
-                // Marker cho vị trí của chính mình
-                Marker(
-                  point: _currentLocation!,
-                  width: 40,
-                  height: 40,
-                  child: const Icon(Icons.my_location, color: Colors.blue, size: 30),
-                ),
-              ],
+                    Marker(
+                      point: currentLocation, // Lấy vị trí từ builder
+                      width: 40,
+                      height: 40,
+                      child: const Icon(Icons.my_location, color: Colors.blue, size: 30),
+                    ),
+                  ],
+                );
+              },
             ),
           ],
         ),
