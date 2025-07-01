@@ -15,9 +15,13 @@ dependencies:
   shared_preferences: ^2.5.3
   google_sign_in: ^6.1.5
   flutter_map: ^6.1.0
+  cloud_firestore: ^4.8.0
   latlong2: ^0.9.0
-  image_picker: ^1.0.7
-
+  firebase_database: ^10.3.14
+  geolocator: ^10.1.0
+  collection: ^1.17.2
+  http: ^1.4.0
+  geocoding: ^2.1.0
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -25,19 +29,15 @@ dev_dependencies:
   build_runner: ^2.4.11
 
 flutter:
+
   uses-material-design: true
-  assets:
-    - assets/fonts/
+  # assets:
+  #  - images/a_dot_burr.jpeg
+  #  - images/a_dot_ham.jpeg
   fonts:
-    - family: BeVietnamPro
-      fonts:
+  - family: BeVietnamPro
+    fonts:
         - asset: assets/fonts/BeVietnamPro.ttf
-    - family: Montserrat
-      fonts:
-        - asset: assets/fonts/Montserrat.ttf
-    - family: NunitoSans
-      fonts:
-        - asset: assets/fonts/NunitoSans.ttf
   #       - asset: fonts/Schyler-Italic.ttf
   #         style: italic
   #   - family: Trajan Pro
@@ -45,3 +45,5 @@ flutter:
   #       - asset: fonts/TrajanPro.ttf
   #       - asset: fonts/TrajanPro_Bold.ttf
   #         weight: 700
+  assets:
+    - assets/fonts/
