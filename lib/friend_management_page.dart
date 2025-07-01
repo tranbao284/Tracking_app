@@ -72,15 +72,15 @@ class _FriendsManagementPageState extends State<FriendsManagementPage> {
             return ListTile(
               leading: CircleAvatar(
                 // Có thể thêm ảnh đại diện ở đây
-                child: Text(userData['displayName']?[0] ?? 'U'),
+                child: Text(userData['name']?[0] ?? 'U'),
               ),
-              title: Text(userData['displayName'] ?? 'Người dùng mới'),
+              title: Text(userData['name'] ?? 'Người dùng mới'),
               subtitle: Text(userData['email'] ?? 'Không có email'),
               trailing: ElevatedButton(
                 onPressed: () {
                   _firestoreService.sendFriendRequest(userDoc.id);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Đã gửi lời mời đến ${userData['displayName']}')),
+                    SnackBar(content: Text('Đã gửi lời mời đến ${userData['name']}')),
                   );
                 },
                 child: const Text('Kết bạn'),
@@ -125,9 +125,9 @@ class _FriendsManagementPageState extends State<FriendsManagementPage> {
                   margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   child: ListTile(
                     leading: CircleAvatar(
-                      child: Text(user['displayName']?[0] ?? 'U'),
+                      child: Text(user['name']?[0] ?? 'U'),
                     ),
-                    title: Text(user['displayName'] ?? 'Người dùng mới'),
+                    title: Text(user['name'] ?? 'Người dùng mới'),
                     subtitle: Text('${user['email']} muốn kết bạn với bạn.'),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,

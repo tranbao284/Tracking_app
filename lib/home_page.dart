@@ -13,13 +13,13 @@ import 'firestore_service.dart'; //  Quan trọng: Thêm import này
 //  Tạo một class để chứa thông tin bạn bè cho dễ quản lý
 class Friend {
   final String id;
-  final String displayName;
+  final String name;
   final String email;
   final LatLng? location;
 
   Friend({
     required this.id,
-    required this.displayName,
+    required this.name,
     required this.email,
     this.location,
   });
@@ -128,7 +128,7 @@ class _HomePageState extends State<HomePage> {
             itemBuilder: (context, index) {
               final friend = friendsWithLocation[index];
               return ListTile(
-                title: Text(friend.displayName),
+                title: Text(friend.name),
                 onTap: () => Navigator.of(context).pop(friend),
               );
             },
@@ -224,7 +224,7 @@ class _HomePageState extends State<HomePage> {
                 final locationData = data['location'] as GeoPoint?;
                 return Friend(
                   id: doc.id,
-                  displayName: data['displayName'] ?? 'N/A',
+                  name: data['name'] ?? 'N/A',
                   email: data['email'] ?? 'N/A',
                   location: locationData != null ? LatLng(locationData.latitude, locationData.longitude) : null,
                 );
@@ -270,7 +270,7 @@ class _HomePageState extends State<HomePage> {
                     width: 80,
                     height: 80,
                     child: Tooltip(
-                      message: friend.displayName,
+                      message: friend.name,
                       child: const Icon(Icons.location_pin, color: Colors.red, size: 35),
                     ),
                   ),

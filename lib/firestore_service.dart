@@ -9,10 +9,7 @@ class FirestoreService {
   // Lấy thông tin người dùng đang đăng nhập
   User? get currentUser => _auth.currentUser;
 
-  // --- Quản lý thông tin User ---
-
-  /// Lưu thông tin người dùng khi họ đăng ký
-  /// hoặc cập nhật thông tin khi cần.
+  // Lưu thông tin người dùng khi họ đăng ký
   Future<void> saveUser(User user, {String? displayName}) async {
     final userRef = _db.collection('users').doc(user.uid);
     // Dùng SetOptions(merge: true) để không ghi đè dữ liệu hiện có (như vị trí)
