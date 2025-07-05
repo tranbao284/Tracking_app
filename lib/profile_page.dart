@@ -110,7 +110,7 @@ class _ProfilePageState extends State<ProfilePage> {
         final file = html.File([blob], fileName); // ✅ Tạo File từ Blob có tên
 
         final formData = html.FormData();
-        formData.appendBlob('file', file); // ✅ Append file đúng cách
+        formData.appendBlob('file', file); //
         formData.append('upload_preset', _uploadPreset);
         formData.append('api_key', _apiKey);
 
@@ -353,7 +353,7 @@ class _ProfilePageState extends State<ProfilePage> {
                     setState(() {
                       _showPasswordForm = true;
                       _errorMessage = null;
-                      _phoneController.text = _phone;
+                      //_phoneController.text = _phone;
                     });
                   },
                 ),
