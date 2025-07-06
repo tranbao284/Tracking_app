@@ -16,12 +16,7 @@ class Friend {
   final String email;
   final LatLng? location;
 
-  Friend({
-    required this.id,
-    required this.name,
-    required this.email,
-    this.location,
-  });
+  Friend({required this.id, required this.name, required this.email, this.location});
 }
 
 class HomePage extends StatefulWidget {
@@ -34,9 +29,6 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final MapController _mapController = MapController();
   final FirestoreService _firestoreService = FirestoreService();
-
-  // ✅ THAY ĐỔI 1: Sử dụng ValueNotifier để chứa vị trí hiện tại
-  // Điều này cho phép chúng ta cập nhật vị trí mà không cần gọi setState
   final ValueNotifier<LatLng?> _currentLocationNotifier = ValueNotifier(null);
 
   LatLng? _mapCenter;
@@ -44,7 +36,6 @@ class _HomePageState extends State<HomePage> {
   Duration? _tripDuration;
   List<LatLng> _routePoints = [];
   bool _isLoadingRoute = false;
-
   List<Friend> _friends = [];
 
   @override
@@ -56,32 +47,30 @@ class _HomePageState extends State<HomePage> {
   @override
   void dispose() {
     _locationUpdateTimer?.cancel();
-    _currentLocationNotifier.dispose(); // Nhớ dispose notifier
+    _currentLocationNotifier.dispose();
     super.dispose();
   }
 
   void _initLocationTracking() async {
     LocationPermission permission = await Geolocator.requestPermission();
-    if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
-      return;
-    }
+    if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) return;
 
     try {
       Position pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.bestForNavigation);
       final initialPos = LatLng(pos.latitude, pos.longitude);
-
-      // ✅ THAY ĐỔI 2: Cập nhật notifier và chỉ gọi setState cho _mapCenter một lần
+      if (!mounted) return;
       _currentLocationNotifier.value = initialPos;
       setState(() {
         _mapCenter = initialPos;
       });
       _firestoreService.updateUserLocation(initialPos);
-
     } catch (e) {
       print('❌ Lỗi lấy vị trí lần đầu: $e');
     }
 
     _locationUpdateTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
+      if (!mounted) return;
+
       try {
         final position = await Geolocator.getCurrentPosition();
         final newPos = LatLng(position.latitude, position.longitude);
@@ -98,31 +87,31 @@ class _HomePageState extends State<HomePage> {
           }
         }
 
-        // ✅ THAY ĐỔI 3: Chỉ cập nhật giá trị của notifier, KHÔNG GỌI setState
+        if (!mounted) return;
         _currentLocationNotifier.value = newPos;
         _firestoreService.updateUserLocation(newPos);
-
       } catch (e) {
         print('❌ Lỗi lấy vị trí định kỳ: $e');
       }
     });
   }
 
+  void _zoomToMyLocation() {
+    if (_currentLocationNotifier.value != null) {
+      _mapController.move(_currentLocationNotifier.value!, 16.0);
+    }
+  }
+
   Future<void> _showPathSelectionDialog() async {
-    // Sử dụng giá trị từ notifier để kiểm tra
     if (_currentLocationNotifier.value == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Chưa có vị trí hiện tại để tìm đường!')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Chưa có vị trí hiện tại để tìm đường!')));
       return;
     }
-    // ... phần còn lại của hàm giữ nguyên
+
     final friendsWithLocation = _friends.where((f) => f.location != null).toList();
 
     if (friendsWithLocation.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Chưa có bạn bè nào online.')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Chưa có bạn bè nào online.')));
       return;
     }
 
@@ -150,7 +139,6 @@ class _HomePageState extends State<HomePage> {
     if (selectedFriend == null) return;
 
     final friendPosition = selectedFriend.location!;
-
     setState(() {
       _isLoadingRoute = true;
       _routePoints.clear();
@@ -183,12 +171,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  void _zoomToMyLocation() {
-    if (_currentLocationNotifier.value != null) {
-      _mapController.move(_currentLocationNotifier.value!, 16.0);
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -199,56 +181,73 @@ class _HomePageState extends State<HomePage> {
           IconButton(
             icon: const Icon(Icons.group_add),
             tooltip: 'Quản lý bạn bè',
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const FriendsManagementPage())),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const FriendsManagementPage()),
+            ),
           ),
           IconButton(
             icon: const Icon(Icons.person),
-            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const ProfilePage())),
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const ProfilePage()),
+            ),
           ),
         ],
       ),
-      body: StreamBuilder<QuerySnapshot>(
-        stream: _firestoreService.getFriendsStream(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return _buildMap([]);
-          }
+      body: SafeArea(
+        child: Column(
+          children: [
+            Container(
+              width: double.infinity,
+              color: Colors.blue.shade100,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: const Text(
+                '📍 Đang theo dõi vị trí bạn bè thời gian thực',
+                style: TextStyle(fontSize: 14, color: Colors.black87),
+              ),
+            ),
+            Expanded(
+              child: StreamBuilder<QuerySnapshot>(
+                stream: _firestoreService.getFriendsStream(),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator());
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return _buildMap([]);
 
-          final friendIds = snapshot.data!.docs.map((doc) => doc.id).toList();
+                  final friendIds = snapshot.data!.docs.map((doc) => doc.id).toList();
 
-          return FutureBuilder<List<DocumentSnapshot>>(
-            future: _firestoreService.getUsersByIds(friendIds),
-            builder: (context, userSnapshots) {
-              if (!userSnapshots.hasData) {
-                return const Center(child: CircularProgressIndicator());
-              }
+                  return FutureBuilder<List<DocumentSnapshot>>(
+                    future: _firestoreService.getUsersByIds(friendIds),
+                    builder: (context, userSnapshots) {
+                      if (!userSnapshots.hasData) return const Center(child: CircularProgressIndicator());
 
-              _friends = userSnapshots.data!.map((doc) {
-                final data = doc.data() as Map<String, dynamic>;
-                final locationData = data['location'] as GeoPoint?;
-                return Friend(
-                  id: doc.id,
-                  name: data['name'] ?? 'N/A',
-                  email: data['email'] ?? 'N/A',
-                  location: locationData != null ? LatLng(locationData.latitude, locationData.longitude) : null,
-                );
-              }).toList();
+                      _friends = userSnapshots.data!.map((doc) {
+                        final data = doc.data() as Map<String, dynamic>;
+                        final locationData = data['location'] as GeoPoint?;
+                        return Friend(
+                          id: doc.id,
+                          name: data['name'] ?? 'N/A',
+                          email: data['email'] ?? 'N/A',
+                          location: locationData != null
+                              ? LatLng(locationData.latitude, locationData.longitude)
+                              : null,
+                        );
+                      }).toList();
 
-              return _buildMap(_friends);
-            },
-          );
-        },
+                      return _buildMap(_friends);
+                    },
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildMap(List<Friend> friends) {
-    if (_mapCenter == null) {
-      return const Center(child: Text('⏳ Đang lấy vị trí...'));
-    }
+    if (_mapCenter == null) return const Center(child: Text('⏳ Đang lấy vị trí...'));
 
     return Stack(
       children: [
@@ -260,20 +259,17 @@ class _HomePageState extends State<HomePage> {
           ),
           children: [
             TileLayer(
-              urlTemplate: 'https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/256/{z}/{x}/{y}@2x?access_token=pk.eyJ1IjoiMnRteTI2IiwiYSI6ImNtOXkzNnBmczFjc3MyaXB5bWhxNzA5aXMifQ.NGsfTuxwfT6P5K2EVwucTQ',
+              urlTemplate:
+              'https://api.mapbox.com/styles/v1/mapbox/streets-v12/tiles/256/{z}/{x}/{y}@2x?access_token=pk.eyJ1IjoiMnRteTI2IiwiYSI6ImNtOXkzNnBmczFjc3MyaXB5bWhxNzA5aXMifQ.NGsfTuxwfT6P5K2EVwucTQ',
               userAgentPackageName: 'com.example.tracking',
             ),
             PolylineLayer(
               polylines: [Polyline(points: _routePoints, strokeWidth: 4, color: Colors.green)],
             ),
-            // ✅ THAY ĐỔI 4: Bọc MarkerLayer trong ValueListenableBuilder
             ValueListenableBuilder<LatLng?>(
               valueListenable: _currentLocationNotifier,
               builder: (context, currentLocation, child) {
-                // Chỉ vẽ marker khi có vị trí
-                if (currentLocation == null) {
-                  return const SizedBox.shrink();
-                }
+                if (currentLocation == null) return const SizedBox.shrink();
                 return MarkerLayer(
                   markers: [
                     ...friends.where((f) => f.location != null).map(
@@ -293,7 +289,11 @@ class _HomePageState extends State<HomePage> {
                               ),
                               child: Text(
                                 friend.name,
-                                style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 12),
+                                style: const TextStyle(
+                                  color: Colors.black,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
                               ),
                             ),
                           ],
@@ -301,7 +301,7 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
                     Marker(
-                      point: currentLocation, // Lấy vị trí từ builder
+                      point: currentLocation,
                       width: 40,
                       height: 40,
                       child: const Icon(Icons.my_location, color: Colors.blue, size: 30),
